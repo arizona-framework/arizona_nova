@@ -19,8 +19,7 @@
     Pid :: pid().
 start(_StartType, _StartArgs) ->
     init_resolver_table(),
-    PubsubScope = application:get_env(arizona_nova, pubsub_scope, nova_scope),
-    arizona_nova_sup:start_link(#{pubsub_scope => PubsubScope}).
+    arizona_nova_sup:start_link().
 
 init_resolver_table() ->
     case ets:whereis(arizona_nova_resolvers) of

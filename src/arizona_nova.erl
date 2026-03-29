@@ -10,11 +10,11 @@ WebSocket endpoint can route to the correct view module.
 
 ```erlang
 %% In your app's start/2:
-arizona_nova:register_views(my_app, fun my_controller:resolve_view/1).
+arizona_nova:register_views(my_app, fun my_controller:resolve_view/2).
 ```
 """.
 
--export([prefix/0, register_views/2, resolve_view/1]).
+-export([prefix/0, register_views/2, resolve_view/2]).
 
 -define(RESOLVER_TABLE, arizona_nova_resolvers).
 
@@ -27,35 +27,36 @@ prefix() ->
     end.
 
 -doc "Register a view resolver for an application.".
--spec register_views(atom(), fun((map()) -> {view, module(), term(), list()})) -> ok.
-register_views(App, ResolverFun) when is_atom(App), is_function(ResolverFun, 1) ->
+-spec register_views(atom(), fun((binary(), term()) -> {module(), arizona_adapter:route_opts()})) ->
+    ok.
+register_views(App, ResolverFun) when is_atom(App), is_function(ResolverFun, 2) ->
     ets:insert(?RESOLVER_TABLE, {App, ResolverFun}),
     ok.
 
 -doc false.
--spec resolve_view(map()) -> {view, module(), term(), list()}.
-resolve_view(Req) ->
+-spec resolve_view(binary(), term()) -> {module(), arizona_adapter:route_opts()}.
+resolve_view(Path, State) ->
     Resolvers = ets:tab2list(?RESOLVER_TABLE),
-    try_resolvers(Resolvers, Req).
+    try_resolvers(Resolvers, Path, State).
 
-try_resolvers([], Req) ->
-    logger:warning(#{msg => ~"No view resolver matched", path => maps:get(path, Req, undefined)}),
-    error({no_view_resolver, Req});
-try_resolvers([{App, Resolver} | Rest], Req) ->
+try_resolvers([], Path, _State) ->
+    logger:warning(#{msg => ~"No view resolver matched", path => Path}),
+    error({no_view_resolver, Path});
+try_resolvers([{App, Resolver} | Rest], Path, State) ->
     try
-        case Resolver(Req) of
-            {view, _, _, _} = Result ->
+        case Resolver(Path, State) of
+            {_Handler, _RouteOpts} = Result ->
                 Result;
             Other ->
                 logger:warning(#{
                     msg => ~"View resolver returned unexpected format", app => App, result => Other
                 }),
-                try_resolvers(Rest, Req)
+                try_resolvers(Rest, Path, State)
         end
     catch
         Class:Reason ->
             logger:warning(#{
                 msg => ~"View resolver failed", app => App, class => Class, reason => Reason
             }),
-            try_resolvers(Rest, Req)
+            try_resolvers(Rest, Path, State)
     end.
