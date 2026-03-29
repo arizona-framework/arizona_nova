@@ -24,6 +24,8 @@ start(_StartType, _StartArgs) ->
 maybe_setup_live_reload() ->
     case application:get_env(arizona_nova, live_reload, false) of
         true ->
+            ReloadUrl = <<(arizona_nova:prefix())/binary, "/reload">>,
+            persistent_term:put(arizona_reload_url, ReloadUrl),
             {ok, App} = nova:get_main_app(),
             AppDir = code:lib_dir(App),
             SrcDir = filename:join(AppDir, "src"),

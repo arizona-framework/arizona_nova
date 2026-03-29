@@ -38,14 +38,39 @@ route(Path, Handler, Opts) ->
             Acc#{binary_to_atom(K) => V}
         end, #{}, maps:get(bindings, Req, #{})),
         QueryParams = maps:from_list(cowboy_req:parse_qs(Req)),
-        MergedBindings = maps:merge(PathBindings, QueryParams),
+        Bindings = maps:merge(PathBindings, QueryParams),
         RenderOpts = #{
-            bindings => MergedBindings,
+            bindings => Bindings,
             layout => maps:get(layout, Opts, undefined),
             on_mount => maps:get(on_mount, Opts, [])
         },
-        Html = arizona_render:render_to_iolist(Handler, RenderOpts),
-        {status, 200, #{<<"content-type">> => <<"text/html">>}, iolist_to_binary(Html)}
+        Headers = #{<<"content-type">> => <<"text/html">>},
+        case arizona_reloader:get_error() of
+            undefined ->
+                try arizona_render:render_to_iolist(Handler, RenderOpts) of
+                    Page ->
+                        {status, 200, Headers, iolist_to_binary(Page)}
+                catch
+                    Class:Reason:Stacktrace ->
+                        ErrorInfo = #{
+                            class => Class,
+                            reason => Reason,
+                            stacktrace => Stacktrace,
+                            reload_url => reload_url()
+                        },
+                        Body = render_error_page(Bindings, ErrorInfo),
+                        {status, 500, Headers, iolist_to_binary(Body)}
+                end;
+            #{errors := Errors} ->
+                ErrorInfo = #{
+                    class => error,
+                    reason => {compile_error, Errors},
+                    stacktrace => [],
+                    reload_url => reload_url()
+                },
+                Body = render_error_page(Bindings, ErrorInfo),
+                {status, 500, Headers, iolist_to_binary(Body)}
+        end
     end,
     {Path, Fun, #{methods => [get]}}.
 
@@ -58,3 +83,10 @@ compile() ->
             persistent_term:erase(?PENDING_KEY),
             ok = arizona_cowboy_router:compile_routes(lists:reverse(Pending))
     end.
+
+render_error_page(Bindings, ErrorInfo) ->
+    Tmpl = arizona_error_page:render(Bindings#{error_info => ErrorInfo}),
+    arizona_render:render_to_iolist(Tmpl).
+
+reload_url() ->
+    persistent_term:get(arizona_reload_url, undefined).
