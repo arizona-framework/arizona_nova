@@ -4,5 +4,6 @@
 -export([resolve_route/2]).
 
 -spec resolve_route(arizona_adapter:path(), term()) -> {module(), arizona_adapter:route_opts()}.
-resolve_route(Path, State) ->
-    arizona_nova:resolve_view(Path, State).
+resolve_route(Path, #{req := Req}) ->
+    ok = arizona_nova_live:compile(),
+    arizona_cowboy_adapter:resolve_route(Path, Req).

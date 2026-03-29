@@ -3,9 +3,6 @@
 -moduledoc """
 Arizona LiveView integration helpers for Nova routes.
 
-Provides `live/1,2,3` to create Nova-compatible route callbacks that
-render Arizona views on the initial HTTP request.
-
 ## Example
 
 ```erlang
@@ -14,36 +11,34 @@ render Arizona views on the initial HTTP request.
 -export([routes/1]).
 
 routes(_Env) ->
+    Layout = {my_layout, render},
     [#{prefix => "",
        security => false,
        routes => [
-           {"/", arizona_nova_live:live(my_home_view), #{methods => [get]}},
-           {"/counter", arizona_nova_live:live(my_counter_view, #{}, #{count => 0}), #{methods => [get]}},
+           arizona_nova_live:route("/", my_home_view, #{layout => Layout}),
+           arizona_nova_live:route("/modules/:module_id", my_module_view, #{layout => Layout}),
            {"/ws", arizona_nova_ws, #{protocol => ws}},
            {"/assets/[...]", "static/assets"}
        ]}].
 ```
 """.
 
--export([live/1, live/2, live/3]).
+-export([route/3, compile/0]).
 
--doc "Create a Nova route callback that renders an Arizona view.".
--spec live(module()) -> fun((map()) -> {status, 200, map(), binary()}).
-live(Handler) ->
-    live(Handler, #{}, #{}).
+-define(PENDING_KEY, arizona_nova_pending_routes).
 
--doc "Create a Nova route callback with route options (layout, on_mount).".
--spec live(module(), map()) -> fun((map()) -> {status, 200, map(), binary()}).
-live(Handler, Opts) ->
-    live(Handler, Opts, #{}).
-
--doc "Create a Nova route callback with route options and initial bindings.".
--spec live(module(), map(), map()) -> fun((map()) -> {status, 200, map(), binary()}).
-live(Handler, Opts, Bindings) ->
-    fun(Req) ->
-        PathBindings = cowboy_req:bindings(Req),
+-doc "Create a Nova route tuple for a live view and register for WS navigate.".
+-spec route(string() | binary(), module(), map()) -> {string(), fun(), map()}.
+route(Path, Handler, Opts) ->
+    PathBin = iolist_to_binary(Path),
+    Pending = persistent_term:get(?PENDING_KEY, []),
+    persistent_term:put(?PENDING_KEY, [{live, PathBin, Handler, Opts} | Pending]),
+    Fun = fun(Req) ->
+        PathBindings = maps:fold(fun(K, V, Acc) ->
+            Acc#{binary_to_atom(K) => V}
+        end, #{}, maps:get(bindings, Req, #{})),
         QueryParams = maps:from_list(cowboy_req:parse_qs(Req)),
-        MergedBindings = maps:merge(maps:merge(Bindings, PathBindings), QueryParams),
+        MergedBindings = maps:merge(PathBindings, QueryParams),
         RenderOpts = #{
             bindings => MergedBindings,
             layout => maps:get(layout, Opts, undefined),
@@ -51,4 +46,15 @@ live(Handler, Opts, Bindings) ->
         },
         Html = arizona_render:render_to_iolist(Handler, RenderOpts),
         {status, 200, #{<<"content-type">> => <<"text/html">>}, iolist_to_binary(Html)}
+    end,
+    {Path, Fun, #{methods => [get]}}.
+
+-doc false.
+-spec compile() -> ok.
+compile() ->
+    case persistent_term:get(?PENDING_KEY, []) of
+        [] -> ok;
+        Pending ->
+            persistent_term:erase(?PENDING_KEY),
+            ok = arizona_cowboy_router:compile_routes(lists:reverse(Pending))
     end.

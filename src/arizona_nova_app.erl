@@ -18,19 +18,7 @@
     StartArgs :: term(),
     Pid :: pid().
 start(_StartType, _StartArgs) ->
-    init_resolver_table(),
     arizona_nova_sup:start_link().
-
-init_resolver_table() ->
-    case ets:whereis(arizona_nova_resolvers) of
-        undefined ->
-            _ = ets:new(arizona_nova_resolvers, [
-                named_table, public, set, {read_concurrency, true}
-            ]),
-            ok;
-        _ ->
-            ok
-    end.
 
 -spec stop(State) -> ok when
     State :: term().
