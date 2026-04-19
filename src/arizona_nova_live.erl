@@ -38,7 +38,8 @@ route(Path, Handler, Opts) ->
             Acc#{binary_to_atom(K) => V}
         end, #{}, maps:get(bindings, Req, #{})),
         QueryParams = maps:from_list(cowboy_req:parse_qs(Req)),
-        Bindings = maps:merge(PathBindings, QueryParams),
+        StaticBindings = maps:get(bindings, Opts, #{}),
+        Bindings = maps:merge(maps:merge(StaticBindings, PathBindings), QueryParams),
         RenderOpts = #{
             bindings => Bindings,
             layout => maps:get(layout, Opts, undefined),
