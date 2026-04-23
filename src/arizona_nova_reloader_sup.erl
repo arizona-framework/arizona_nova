@@ -42,24 +42,36 @@ init([]) ->
     ChildSpecs = [
         #{
             id => arizona_nova_erl_reloader,
-            start => {arizona_watcher, start_link, [SrcDir, #{
-                patterns => ["\\.erl$"],
-                callback => fun arizona_reloader:reload_erl/1
-            }]}
+            start =>
+                {arizona_watcher, start_link, [
+                    SrcDir,
+                    #{
+                        patterns => ["\\.erl$"],
+                        callback => fun arizona_reloader:reload_erl/1
+                    }
+                ]}
         },
         #{
             id => arizona_nova_css_reloader,
-            start => {arizona_watcher, start_link, [PrivDir, #{
-                patterns => ["\\.css$"],
-                callback => fun arizona_reloader:reload_css/1
-            }]}
+            start =>
+                {arizona_watcher, start_link, [
+                    PrivDir,
+                    #{
+                        patterns => ["\\.css$"],
+                        callback => fun arizona_reloader:reload_css/1
+                    }
+                ]}
         },
         #{
             id => arizona_nova_js_reloader,
-            start => {arizona_watcher, start_link, [PrivDir, #{
-                patterns => ["\\.js$"],
-                callback => fun(_) -> arizona_reloader:broadcast() end
-            }]}
+            start =>
+                {arizona_watcher, start_link, [
+                    PrivDir,
+                    #{
+                        patterns => ["\\.js$"],
+                        callback => fun(_) -> arizona_reloader:broadcast() end
+                    }
+                ]}
         }
     ],
     {ok, {SupFlags, ChildSpecs}}.
