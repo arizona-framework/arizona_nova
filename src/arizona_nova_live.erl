@@ -42,52 +42,18 @@ route(Path, Handler, Opts) ->
     Pending = persistent_term:get(?PENDING_KEY, []),
     persistent_term:put(?PENDING_KEY, [{live, PathBin, Handler, Opts} | Pending]),
     Fun = fun(Req) ->
-        ArzReq = arizona_cowboy_req:new(Req),
-        StaticBindings = maps:get(bindings, Opts, #{}),
-        Middlewares = maps:get(middlewares, Opts, []),
-        case arizona_req:apply_middlewares(Middlewares, ArzReq, StaticBindings) of
-            {halt, _HaltReq} ->
+        Headers = #{<<"content-type">> => <<"text/html">>},
+        case arizona_http:render(Handler, Req, Opts) of
+            {halt, _RawReq} ->
                 %% Middleware already wrote a reply via the raw cowboy req.
                 {status, 200};
-            {cont, ArzReq1, Bindings1} ->
-                render_page(Handler, ArzReq1, Bindings1, Opts)
+            {ok, Status, Body} ->
+                {status, Status, Headers, iolist_to_binary(Body)};
+            {error, Status, Body} ->
+                {status, Status, Headers, iolist_to_binary(Body)}
         end
     end,
     {Path, Fun, #{methods => [get]}}.
-
-render_page(Handler, ArzReq, Bindings, Opts) ->
-    RenderOpts = #{
-        bindings => Bindings,
-        layout => maps:get(layout, Opts, undefined),
-        on_mount => maps:get(on_mount, Opts, [])
-    },
-    Headers = #{<<"content-type">> => <<"text/html">>},
-    case arizona_reloader:get_error() of
-        undefined ->
-            try arizona_render:render_view_to_iolist(Handler, ArzReq, RenderOpts) of
-                Page ->
-                    {status, 200, Headers, iolist_to_binary(Page)}
-            catch
-                Class:Reason:Stacktrace ->
-                    ErrorInfo = #{
-                        class => Class,
-                        reason => Reason,
-                        stacktrace => Stacktrace,
-                        reload_url => reload_url()
-                    },
-                    Body = render_error_page(Bindings, ErrorInfo),
-                    {status, 500, Headers, iolist_to_binary(Body)}
-            end;
-        #{errors := Errors} ->
-            ErrorInfo = #{
-                class => error,
-                reason => {compile_error, Errors},
-                stacktrace => [],
-                reload_url => reload_url()
-            },
-            Body = render_error_page(Bindings, ErrorInfo),
-            {status, 500, Headers, iolist_to_binary(Body)}
-    end.
 
 -doc false.
 -spec compile() -> ok.
@@ -99,10 +65,3 @@ compile() ->
             persistent_term:erase(?PENDING_KEY),
             ok = arizona_cowboy_router:compile_routes(lists:reverse(Pending))
     end.
-
-render_error_page(Bindings, ErrorInfo) ->
-    Tmpl = arizona_error_page:render(Bindings#{error_info => ErrorInfo}),
-    arizona_render:render_to_iolist(Tmpl).
-
-reload_url() ->
-    persistent_term:get(arizona_reload_url, undefined).
