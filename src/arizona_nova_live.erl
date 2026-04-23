@@ -3,24 +3,8 @@
 -moduledoc """
 Arizona LiveView integration helpers for Nova routes.
 
-## Example
-
-```erlang
--module(my_app_router).
--behaviour(nova_router).
--export([routes/1]).
-
-routes(_Env) ->
-    Layout = {my_layout, render},
-    [#{prefix => "",
-       security => false,
-       routes => [
-           arizona_nova_live:route("/", my_home_view, #{layout => Layout}),
-           arizona_nova_live:route("/modules/:module_id", my_module_view, #{layout => Layout}),
-           {"/ws", arizona_nova_ws, #{protocol => ws}},
-           {"/assets/[...]", "static/assets"}
-       ]}].
-```
+Prefer declaring routes with `arizona_nova:routes/1` and `{live, ...}`
+tuples. See that module's docs for the recommended usage.
 """.
 
 -export([route/3, compile/0]).
