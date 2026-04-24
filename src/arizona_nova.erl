@@ -14,13 +14,13 @@ directly:
 -export([routes/1]).
 
 routes(_Env) ->
-    Layout = {my_layout, render},
+    Layouts = [{my_layout, render}],
     arizona_nova:routes([
         #{prefix => "",
           security => false,
           routes => [
-              {live, "/", my_home_view, #{layout => Layout}},
-              {live, "/modules/:module_id", my_module_view, #{layout => Layout}},
+              {live, "/", my_home_view, #{layouts => Layouts}},
+              {live, "/modules/:module_id", my_module_view, #{layouts => Layouts}},
               {"/ws", arizona_nova_ws, #{protocol => ws}},
               {"/assets/[...]", "static/assets"}
           ]}

@@ -15,7 +15,7 @@ Create a Nova route tuple for an Arizona view and register for WS navigate.
 `Handler` must be an `arizona_view` module (includes `arizona_view.hrl`, exports
 `mount/2`). URL path bindings and query params are exposed to mount via the
 `az:request()` argument; the route's `bindings` option is passed as static
-initial bindings. Route `Opts` may include `layout`, `on_mount`, and
+initial bindings. Route `Opts` may include `layouts`, `on_mount`, and
 `middlewares`.
 """.
 -spec route(string() | binary(), module(), map()) -> {string(), fun(), map()}.
