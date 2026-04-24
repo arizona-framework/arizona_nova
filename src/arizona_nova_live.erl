@@ -7,9 +7,7 @@ Prefer declaring routes with `arizona_nova:routes/1` and `{live, ...}`
 tuples. See that module's docs for the recommended usage.
 """.
 
--export([route/3, compile/0]).
-
--define(PENDING_KEY, arizona_nova_pending_routes).
+-export([route/3]).
 
 -doc """
 Create a Nova route tuple for an Arizona view and register for WS navigate.
@@ -23,14 +21,15 @@ initial bindings. Route `Opts` may include `layout`, `on_mount`, and
 -spec route(string() | binary(), module(), map()) -> {string(), fun(), map()}.
 route(Path, Handler, Opts) ->
     PathBin = iolist_to_binary(Path),
-    Pending = persistent_term:get(?PENDING_KEY, []),
-    persistent_term:put(?PENDING_KEY, [{live, PathBin, Handler, Opts} | Pending]),
+    ok = arizona_nova_router:append_pending([{live, PathBin, Handler, Opts}]),
     Fun = fun(Req) ->
         Headers = #{<<"content-type">> => <<"text/html">>},
         case arizona_http:render(Handler, Req, Opts) of
             {halt, _RawReq} ->
                 %% Middleware already wrote a reply via the raw cowboy req.
                 {status, 200};
+            {redirect, Status, Location} ->
+                {status, Status, #{<<"location">> => Location}, <<>>};
             {ok, Status, Body} ->
                 {status, Status, Headers, iolist_to_binary(Body)};
             {error, Status, Body} ->
@@ -38,14 +37,3 @@ route(Path, Handler, Opts) ->
         end
     end,
     {Path, Fun, #{methods => [get]}}.
-
--doc false.
--spec compile() -> ok.
-compile() ->
-    case persistent_term:get(?PENDING_KEY, []) of
-        [] ->
-            ok;
-        Pending ->
-            persistent_term:erase(?PENDING_KEY),
-            ok = arizona_cowboy_router:compile_routes(lists:reverse(Pending))
-    end.
