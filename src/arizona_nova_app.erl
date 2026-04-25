@@ -13,25 +13,11 @@
 %% Behaviour (application) callbacks
 %% --------------------------------------------------------------------
 
--spec start(StartType, StartArgs) -> {ok, Pid} | {error, term()} when
+-spec start(StartType, StartArgs) -> supervisor:startlink_ret() when
     StartType :: application:start_type(),
-    StartArgs :: term(),
-    Pid :: pid().
+    StartArgs :: term().
 start(_StartType, _StartArgs) ->
-    init_resolver_table(),
-    PubsubScope = application:get_env(arizona_nova, pubsub_scope, nova_scope),
-    arizona_nova_sup:start_link(#{pubsub_scope => PubsubScope}).
-
-init_resolver_table() ->
-    case ets:whereis(arizona_nova_resolvers) of
-        undefined ->
-            _ = ets:new(arizona_nova_resolvers, [
-                named_table, public, set, {read_concurrency, true}
-            ]),
-            ok;
-        _ ->
-            ok
-    end.
+    arizona_nova_sup:start_link().
 
 -spec stop(State) -> ok when
     State :: term().

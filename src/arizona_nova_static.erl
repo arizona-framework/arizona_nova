@@ -1,9 +1,9 @@
 -module(arizona_nova_static).
 -moduledoc """
-Serves static assets from arizona_core's priv directory.
+Serves static assets from arizona's priv directory.
 
 Routes like `/arizona/assets/js/:file` are served from
-`code:priv_dir(arizona_core)/static/assets/js/`.
+`code:priv_dir(arizona)/static/assets/js/`.
 """.
 
 -export([serve_js/1]).
@@ -23,7 +23,7 @@ serve_file(PathParts) ->
         true ->
             {status, 403};
         false ->
-            PrivDir = code:priv_dir(arizona_core),
+            PrivDir = code:priv_dir(arizona),
             FullPath = filename:join([PrivDir, "static", "assets" | PathParts]),
             case file:read_file(FullPath) of
                 {ok, Content} ->

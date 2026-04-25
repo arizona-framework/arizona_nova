@@ -7,7 +7,7 @@
         kernel,
         stdlib,
         nova,
-        arizona_core,
+        arizona,
         cowboy
     ]},
     {env, [

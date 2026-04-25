@@ -1,79 +1,58 @@
 -module(arizona_nova_ws).
 -moduledoc """
-Nova-compatible WebSocket handler for Arizona LiveView connections.
+Nova WebSocket handler for Arizona live connections.
 
-Wraps `arizona_nova_websocket` and flattens multi-frame replies
-to match Nova's single-frame WebSocket interface. Uses registered
-view resolvers from `arizona_nova:register_views/2`.
+Thin wrapper around `arizona_socket` that translates between
+Nova's WebSocket interface and Arizona's transport protocol.
+Delegates the upgrade-time handshake (parse `_az_path`/`_az_reconnect`,
+resolve the route, run middlewares) to `arizona_ws:prepare/3`.
 """.
 
--export([init/1, websocket_init/1, websocket_handle/2, websocket_info/2, terminate/3]).
+-export([init/1, websocket_init/1, websocket_handle/2, websocket_info/2]).
 
 -spec init(map()) -> {ok, map()}.
-init(ControllerData) ->
-    arizona_nova_websocket:init(ControllerData#{view_resolver => fun arizona_nova:resolve_view/1}).
+init(#{req := Req} = ControllerData) ->
+    QS = cowboy_req:parse_qs(Req),
+    case arizona_ws:prepare(QS, arizona_cowboy_req, Req) of
+        {halt, HaltReq} ->
+            {ok, ControllerData#{halt => arizona_req:raw(HaltReq)}};
+        {cont, #{req := ArzReq} = State} ->
+            %% Map State.req -> az_req so it doesn't clobber Nova's CD.req
+            %% (the raw cowboy req).
+            AzState = maps:remove(req, State#{az_req => ArzReq}),
+            {ok, maps:merge(ControllerData, AzState)}
+    end.
 
 -spec websocket_init(map()) -> {reply, term(), map()} | {ok, map()}.
-websocket_init(ControllerData) ->
-    try
-        flatten_reply(arizona_nova_websocket:websocket_init(ControllerData))
-    catch
-        Class:Reason:Stack ->
-            logger:error(#{
-                msg => ~"Arizona WS init failed",
-                class => Class,
-                reason => Reason,
-                stacktrace => Stack
-            }),
-            {ok, ControllerData}
-    end.
+websocket_init(
+    #{
+        handler := H,
+        bindings := IB,
+        on_mount := OM,
+        az_req := ArzReq,
+        reconnect := R
+    } = CD
+) ->
+    Opts = #{reconnect => R, on_mount => OM},
+    to_nova(arizona_socket:init(H, IB, ArzReq, Opts), CD).
 
 -spec websocket_handle(term(), map()) -> {reply, term(), map()} | {ok, map()}.
-websocket_handle({ping, _}, ControllerData) ->
-    {ok, ControllerData};
-websocket_handle({pong, _}, ControllerData) ->
-    {ok, ControllerData};
-websocket_handle(Frame, ControllerData) ->
-    logger:info(#{
-        msg => ~"WS handle frame",
-        frame => Frame,
-        has_live_pid => maps:is_key(live_pid, ControllerData)
-    }),
-    try
-        Result = arizona_nova_websocket:websocket_handle(Frame, ControllerData),
-        logger:info(#{msg => ~"WS handle result", result_type => element(1, Result)}),
-        flatten_reply(Result)
-    catch
-        Class:Reason:Stack ->
-            logger:error(#{
-                msg => ~"WS handle crashed", class => Class, reason => Reason, stacktrace => Stack
-            }),
-            {ok, ControllerData}
-    end.
+websocket_handle({text, Data}, #{socket := Sock} = CD) ->
+    to_nova(arizona_socket:handle_in(Data, Sock), CD);
+websocket_handle(_Frame, CD) ->
+    {ok, CD}.
 
 -spec websocket_info(term(), map()) -> {reply, term(), map()} | {ok, map()}.
-websocket_info({pending_frame, Frame}, ControllerData) ->
-    {reply, Frame, ControllerData};
-websocket_info({actions_response, _, _, _, _} = Msg, ControllerData) ->
-    flatten_reply(arizona_nova_websocket:websocket_info(Msg, ControllerData));
-websocket_info({pubsub_message, _, _} = Msg, ControllerData) ->
-    flatten_reply(arizona_nova_websocket:websocket_info(Msg, ControllerData));
-websocket_info(_Msg, ControllerData) ->
-    {ok, ControllerData}.
-
--spec terminate(term(), cowboy_req:req(), map()) -> ok.
-terminate(Reason, Req, ControllerData) ->
-    arizona_nova_websocket:terminate(Reason, Req, ControllerData).
+websocket_info(Msg, #{socket := Sock} = CD) ->
+    to_nova(arizona_socket:handle_info(Msg, Sock), CD).
 
 %%----------------------------------------------------------------------
 %% Internal
 %%----------------------------------------------------------------------
 
-%% Nova's handle_ws expects {reply, SingleFrame, CD}, not {reply, [Frame], CD}.
-flatten_reply({ok, CD}) ->
-    {ok, CD};
-flatten_reply({reply, [Frame], CD}) ->
-    {reply, Frame, CD};
-flatten_reply({reply, [Frame | Rest], CD}) ->
-    _ = [self() ! {pending_frame, F} || F <- Rest],
-    {reply, Frame, CD}.
+to_nova({ok, Sock}, CD) ->
+    {ok, CD#{socket => Sock}};
+to_nova({reply, Data, Sock}, CD) ->
+    {reply, {text, Data}, CD#{socket => Sock}};
+to_nova({close, Code, Reason, _Sock}, CD) ->
+    {reply, {close, Code, Reason}, CD}.

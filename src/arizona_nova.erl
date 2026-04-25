@@ -1,22 +1,35 @@
 -module(arizona_nova).
 -moduledoc """
-Public API for Arizona Nova integration.
+Configuration helpers for Arizona Nova integration.
 
-Provides view resolver registration and configuration helpers.
-Apps register their view resolvers at startup so the shared
-WebSocket endpoint can route to the correct view module.
+## Declaring routes
 
-## Usage
+Use `routes/1` to rewrite `{live, Path, Handler, Opts}` tuples into the
+Nova route tuples Arizona expects, without calling `arizona_nova_live`
+directly:
 
 ```erlang
-%% In your app's start/2:
-arizona_nova:register_views(my_app, fun my_controller:resolve_view/1).
+-module(my_app_router).
+-behaviour(nova_router).
+-export([routes/1]).
+
+routes(_Env) ->
+    Layouts = [{my_layout, render}],
+    arizona_nova:routes([
+        #{prefix => "",
+          security => false,
+          routes => [
+              {live, "/", my_home_view, #{layouts => Layouts}},
+              {live, "/modules/:module_id", my_module_view, #{layouts => Layouts}},
+              {"/ws", arizona_nova_ws, #{protocol => ws}},
+              {"/assets/[...]", "static/assets"}
+          ]}
+    ]).
 ```
 """.
 
--export([prefix/0, register_views/2, resolve_view/1]).
-
--define(RESOLVER_TABLE, arizona_nova_resolvers).
+-export([prefix/0]).
+-export([routes/1]).
 
 -doc "Get the configured URL prefix. Default: `/arizona`.".
 -spec prefix() -> binary().
@@ -26,36 +39,31 @@ prefix() ->
         Prefix when is_list(Prefix) -> list_to_binary(Prefix)
     end.
 
--doc "Register a view resolver for an application.".
--spec register_views(atom(), fun((map()) -> {view, module(), term(), list()})) -> ok.
-register_views(App, ResolverFun) when is_atom(App), is_function(ResolverFun, 1) ->
-    ets:insert(?RESOLVER_TABLE, {App, ResolverFun}),
-    ok.
+-doc """
+Transform a Nova router map list, rewriting any `{live, Path, Handler, Opts}`
+entries into the Nova route tuples `arizona_nova_live` produces. Other
+route tuples pass through unchanged.
 
--doc false.
--spec resolve_view(map()) -> {view, module(), term(), list()}.
-resolve_view(Req) ->
-    Resolvers = ets:tab2list(?RESOLVER_TABLE),
-    try_resolvers(Resolvers, Req).
+The same pass collects the Arizona route declarations and compiles
+them into the Cowboy dispatch table, so SPA navigate requests can
+resolve them without a per-request compile step.
+""".
+-spec routes([map()]) -> [map()].
+routes(RouteMaps) ->
+    {Transformed, ArizonaRoutes} =
+        lists:mapfoldl(fun transform_route_map/2, [], RouteMaps),
+    ok = arizona_cowboy_router:compile_routes(ArizonaRoutes),
+    Transformed.
 
-try_resolvers([], Req) ->
-    logger:warning(#{msg => ~"No view resolver matched", path => maps:get(path, Req, undefined)}),
-    error({no_view_resolver, Req});
-try_resolvers([{App, Resolver} | Rest], Req) ->
-    try
-        case Resolver(Req) of
-            {view, _, _, _} = Result ->
-                Result;
-            Other ->
-                logger:warning(#{
-                    msg => ~"View resolver returned unexpected format", app => App, result => Other
-                }),
-                try_resolvers(Rest, Req)
-        end
-    catch
-        Class:Reason ->
-            logger:warning(#{
-                msg => ~"View resolver failed", app => App, class => Class, reason => Reason
-            }),
-            try_resolvers(Rest, Req)
-    end.
+transform_route_map(#{routes := Routes} = M, Acc0) ->
+    {NovaRoutes, Acc1} = lists:mapfoldl(fun transform_route/2, Acc0, Routes),
+    {M#{routes => NovaRoutes}, Acc1};
+transform_route_map(M, Acc) ->
+    {M, Acc}.
+
+transform_route({live, Path, Handler, Opts}, Acc) ->
+    NovaRoute = arizona_nova_live:route(Path, Handler, Opts),
+    PathBin = iolist_to_binary(Path),
+    {NovaRoute, [{live, PathBin, Handler, Opts} | Acc]};
+transform_route(Route, Acc) ->
+    {Route, Acc}.

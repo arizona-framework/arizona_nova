@@ -1,7 +1,7 @@
 -module(arizona_nova_router).
 -moduledoc """
 Nova router for Arizona. Registers the shared WebSocket endpoint
-and serves arizona_core static assets (JS, CSS).
+and serves arizona static assets (JS, CSS).
 
 Add `arizona_nova` to your app's `nova_apps`:
 
@@ -28,7 +28,7 @@ routes(_Env) ->
             prefix => Prefix,
             security => false,
             routes => [
-                {~"/live", arizona_nova_ws, #{protocol => ws}},
+                {~"/ws", arizona_nova_ws, #{protocol => ws}},
                 {~"/assets/js/:file", fun arizona_nova_static:serve_js/1, #{methods => [get]}}
             ]
         }
