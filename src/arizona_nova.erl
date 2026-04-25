@@ -43,17 +43,27 @@ prefix() ->
 Transform a Nova router map list, rewriting any `{live, Path, Handler, Opts}`
 entries into the Nova route tuples `arizona_nova_live` produces. Other
 route tuples pass through unchanged.
+
+The same pass collects the Arizona route declarations and compiles
+them into the Cowboy dispatch table, so SPA navigate requests can
+resolve them without a per-request compile step.
 """.
 -spec routes([map()]) -> [map()].
 routes(RouteMaps) ->
-    [transform_route_map(M) || M <- RouteMaps].
+    {Transformed, ArizonaRoutes} =
+        lists:mapfoldl(fun transform_route_map/2, [], RouteMaps),
+    ok = arizona_cowboy_router:compile_routes(ArizonaRoutes),
+    Transformed.
 
-transform_route_map(#{routes := Routes} = M) ->
-    M#{routes => [transform_route(R) || R <- Routes]};
-transform_route_map(M) ->
-    M.
+transform_route_map(#{routes := Routes} = M, Acc0) ->
+    {NovaRoutes, Acc1} = lists:mapfoldl(fun transform_route/2, Acc0, Routes),
+    {M#{routes => NovaRoutes}, Acc1};
+transform_route_map(M, Acc) ->
+    {M, Acc}.
 
-transform_route({live, Path, Handler, Opts}) ->
-    arizona_nova_live:route(Path, Handler, Opts);
-transform_route(Route) ->
-    Route.
+transform_route({live, Path, Handler, Opts}, Acc) ->
+    NovaRoute = arizona_nova_live:route(Path, Handler, Opts),
+    PathBin = iolist_to_binary(Path),
+    {NovaRoute, [{live, PathBin, Handler, Opts} | Acc]};
+transform_route(Route, Acc) ->
+    {Route, Acc}.

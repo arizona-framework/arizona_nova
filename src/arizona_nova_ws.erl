@@ -13,12 +13,12 @@ resolve the route, run middlewares) to `arizona_ws:prepare/3`.
 -spec init(map()) -> {ok, map()}.
 init(#{req := Req} = ControllerData) ->
     QS = cowboy_req:parse_qs(Req),
-    case arizona_ws:prepare(QS, arizona_nova_adapter, ControllerData) of
+    case arizona_ws:prepare(QS, arizona_cowboy_req, Req) of
         {halt, HaltReq} ->
             {ok, ControllerData#{halt => arizona_req:raw(HaltReq)}};
         {cont, #{req := ArzReq} = State} ->
             %% Map State.req -> az_req so it doesn't clobber Nova's CD.req
-            %% (the raw cowboy req, needed by the adapter on navigate).
+            %% (the raw cowboy req).
             AzState = maps:remove(req, State#{az_req => ArzReq}),
             {ok, maps:merge(ControllerData, AzState)}
     end.
@@ -33,14 +33,8 @@ websocket_init(
         reconnect := R
     } = CD
 ) ->
-    Opts = #{
-        reconnect => R,
-        on_mount => OM,
-        req => ArzReq,
-        adapter => arizona_nova_adapter,
-        adapter_state => CD
-    },
-    to_nova(arizona_socket:init(H, IB, Opts), CD).
+    Opts = #{reconnect => R, on_mount => OM},
+    to_nova(arizona_socket:init(H, IB, ArzReq, Opts), CD).
 
 -spec websocket_handle(term(), map()) -> {reply, term(), map()} | {ok, map()}.
 websocket_handle({text, Data}, #{socket := Sock} = CD) ->
