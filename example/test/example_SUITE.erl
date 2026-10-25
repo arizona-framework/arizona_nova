@@ -37,7 +37,8 @@ serves_the_live_page(Config) when is_list(Config) ->
 
 serves_the_nova_route(Config) when is_list(Config) ->
     {200, Body} = request(~"/api/time"),
-    ?assertMatch(#{~"utc" := _}, json:decode(Body)).
+    #{~"utc" := Utc} = json:decode(Body),
+    ?assertMatch(<<_:19/binary, "Z">>, Utc).
 
 %% The live view mounts over the socket; an `inc` event comes back as a patch
 %% carrying the new count.
