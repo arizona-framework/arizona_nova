@@ -1,59 +1,68 @@
 # arizona_nova
 
-Arizona LiveView integration for the Nova web framework.
+[Arizona](https://github.com/arizona-framework/arizona) on the
+[Nova](https://github.com/novaframework/nova) web framework.
 
-Bridges [Arizona](https://github.com/novaframework/arizona_core) live views into
-[Nova](https://github.com/novaframework/nova) via a WebSocket controller that
-plugs into Nova's routing and plugin pipeline. Handles the full bidirectional
-protocol: events from the browser, diffs/dispatches/redirects/reloads back.
+Nova owns the Cowboy listener and its routing. Arizona serves its own routes on that same
+listener through [`arizona_cowboy`](https://github.com/arizona-framework/arizona_cowboy)'s
+mounted mode: a request an Arizona route matches (a live page, the live WebSocket, a controller,
+an asset, MCP, dev reload) is answered by Arizona, and everything else reaches Nova's router
+untouched.
 
 ## Installation
 
-Add `arizona_nova` to your deps in `rebar.config`:
-
 ```erlang
 {deps, [
-    {arizona_nova, "~> 0.1"}
+    nova,
+    arizona,
+    arizona_cowboy,
+    arizona_nova
 ]}.
 ```
+
+and list `arizona_nova` in your application's `applications`.
 
 ## Setup
 
-### Route configuration
-
-Register the WebSocket controller in your Nova routes. The `view_resolver`
-function receives the Cowboy request and returns the view module to mount:
+Put Arizona's middleware in front of Nova's chain, and declare the Arizona routes:
 
 ```erlang
-#{prefix => "/live",
-  type => ws,
-  controller => arizona_nova_websocket,
-  controller_data => #{
-      view_resolver => fun my_app_router:resolve_view/1
-  }}
+[
+    {nova, [
+        {bootstrap_application, my_app},
+        {cowboy_configuration, #{
+            port => 8080,
+            middleware_handlers => arizona_nova:middlewares()
+        }}
+    ]},
+    {arizona_nova, [
+        {routes, [
+            {live, ~"/", my_page, #{layouts => [{my_layout, render}]}},
+            {ws, ~"/ws", #{}},
+            {asset, ~"/assets", {priv_dir, arizona, "static/assets/js"}}
+        ]}
+    ]}
+].
 ```
 
-The view resolver must return `{view, ViewModule, MountArg, Middlewares}`.
+`arizona_nova:middlewares()` is Nova's default chain with `arizona_cowboy_middleware` in
+front; pass your own chain to `arizona_nova:middlewares/1` if you customised it.
 
-### Application environment
+When `arizona_nova` starts it mounts the routes on Nova's bootstrap listener. When it stops
+(before Nova, which it depends on) it drains Arizona's live sessions, which reconnect to the
+next node, and unmounts the routes; Nova keeps serving until its own shutdown.
 
-| Key              | Default       | Description                                      |
-|------------------|---------------|--------------------------------------------------|
-| `pubsub_scope`   | `nova_scope`  | PubSub pg scope (share with Nova's pg scope)     |
-| `live_reload`    | `false`       | Subscribe to `arizona:reload` topic for dev reload |
+Arizona routes do not pass through Nova's plugins and security handlers: Arizona's own route
+`middlewares` (the CSRF Origin check among them) apply.
 
-Set in `sys.config` or application env:
+## Env
 
-```erlang
-{arizona_nova, [
-    {pubsub_scope, nova_scope},
-    {live_reload, true}
-]}.
-```
-
-## Documentation
-
-Full documentation is available on [HexDocs](https://hexdocs.pm/arizona_nova).
+| Key | Default | Description |
+| --- | ------- | ----------- |
+| `routes` | (required) | The Arizona route list |
+| `listener` | `nova_listener` | The Nova listener to mount on (the bootstrap application's) |
+| `drain_timeout` | `5000` | Milliseconds a stop waits for Arizona's sessions and requests |
+| `compress`, `error_page`, `ws_opts`, `max_content_length` | | As in `arizona_cowboy_server` |
 
 ## License
 

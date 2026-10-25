@@ -26,30 +26,8 @@ start_link() ->
 %% Behaviour (supervisor) callbacks
 %% --------------------------------------------------------------------
 
+%% Nothing to supervise: Arizona's processes run under `arizona`'s tree and the
+%% listener under Nova's. The application only needs a pid to own.
 -spec init([]) -> {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
 init([]) ->
-    SupFlags = #{
-        strategy => one_for_all,
-        intensity => 0,
-        period => 1
-    },
-    ChildSpecs = reloader_sup_child(),
-    {ok, {SupFlags, ChildSpecs}}.
-
-%% --------------------------------------------------------------------
-%% Internal functions
-%% --------------------------------------------------------------------
-
-reloader_sup_child() ->
-    case application:get_env(arizona_nova, live_reload, false) of
-        true ->
-            [
-                #{
-                    id => arizona_nova_reloader_sup,
-                    start => {arizona_nova_reloader_sup, start_link, []},
-                    type => supervisor
-                }
-            ];
-        false ->
-            []
-    end.
+    {ok, {#{strategy => one_for_one, intensity => 0, period => 1}, []}}.
