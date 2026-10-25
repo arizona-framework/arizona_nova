@@ -10,4 +10,5 @@ start_link() ->
 
 -spec init([]) -> {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
 init([]) ->
-    {ok, {#{strategy => one_for_one}, []}}.
+    Links = #{id => example_links, start => {example_links, start_link, []}},
+    {ok, {#{strategy => one_for_one}, [Links]}}.

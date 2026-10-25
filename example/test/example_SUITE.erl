@@ -1,7 +1,8 @@
 -module(example_SUITE).
 -moduledoc """
-Boots the example (config/sys.config) and drives it over the wire: Arizona's
-live page and a click on it, and Nova's own route, on the one listener.
+Boots the example (config/sys.config) and drives it over the wire: a link
+shortened on Arizona's live dashboard, followed through Nova's redirect, and its
+click arriving back on the dashboard's socket.
 """.
 -include_lib("stdlib/include/assert.hrl").
 
@@ -9,12 +10,20 @@ live page and a click on it, and Nova's own route, on the one listener.
 -export([init_per_suite/1]).
 -export([end_per_suite/1]).
 
--export([serves_the_live_page/1]).
--export([serves_the_nova_route/1]).
--export([a_click_updates_the_count/1]).
+-export([serves_the_dashboard/1]).
+-export([nova_serves_the_api/1]).
+-export([an_unknown_code_is_404/1]).
+-export([shortened_on_arizona_followed_through_nova_counted_live/1]).
+-export([a_non_web_url_is_refused/1]).
 
 all() ->
-    [serves_the_live_page, serves_the_nova_route, a_click_updates_the_count].
+    [
+        serves_the_dashboard,
+        nova_serves_the_api,
+        an_unknown_code_is_404,
+        shortened_on_arizona_followed_through_nova_counted_live,
+        a_non_web_url_is_refused
+    ].
 
 %% config/sys.config, with a free port: 8080 may well be taken on the machine.
 init_per_suite(Config) ->
@@ -30,25 +39,43 @@ end_per_suite(Config) when is_list(Config) ->
     ok = application:stop(arizona_nova),
     ok = application:stop(nova).
 
-serves_the_live_page(Config) when is_list(Config) ->
-    {200, Body} = request(~"/"),
-    ?assertNotEqual(nomatch, binary:match(Body, ~"Count: ")),
+serves_the_dashboard(Config) when is_list(Config) ->
+    {200, _Headers, Body} = request(~"/"),
+    ?assertNotEqual(nomatch, binary:match(Body, ~"/s/arizona")),
     ?assertNotEqual(nomatch, binary:match(Body, ~"/assets/arizona.min.js")).
 
-serves_the_nova_route(Config) when is_list(Config) ->
-    {200, Body} = request(~"/api/time"),
-    #{~"utc" := Utc} = json:decode(Body),
-    ?assertMatch(<<_:19/binary, "Z">>, Utc).
+nova_serves_the_api(Config) when is_list(Config) ->
+    {200, _Headers, Body} = request(~"/api/links"),
+    ?assert(lists:member(~"arizona", [Code || #{~"code" := Code} <- json:decode(Body)])).
 
-%% The live view mounts over the socket; an `inc` event comes back as a patch
-%% carrying the new count.
-a_click_updates_the_count(Config) when is_list(Config) ->
+an_unknown_code_is_404(Config) when is_list(Config) ->
+    ?assertMatch({404, _, _}, request(~"/s/nope")).
+
+%% The whole loop: Arizona creates the link over its socket, Nova redirects a
+%% visitor and counts it, and the count lands on the open dashboard.
+shortened_on_arizona_followed_through_nova_counted_live(Config) when is_list(Config) ->
     Sock = ws_connect(~"/"),
-    {text, Connect} = ws_recv(Sock),
-    ?assertMatch(#{~"a" := _}, json:decode(Connect)),
-    ok = ws_send(Sock, json:encode([~"counter", ~"inc", #{}])),
-    {text, Patch} = ws_recv(Sock),
-    ?assertNotEqual(nomatch, binary:match(Patch, ~"1")),
+    {text, _Connect} = ws_recv(Sock),
+    ok = ws_send(
+        Sock, json:encode([~"dashboard", ~"shorten", #{~"url" => ~"https://www.erlang.org"}])
+    ),
+    {text, Created} = ws_recv(Sock),
+    ?assertNotEqual(nomatch, binary:match(Created, ~"https://www.erlang.org")),
+    [#{code := Code, url := ~"https://www.erlang.org"} | _] = example_links:list(),
+    {302, Headers, _Body} = request(<<"/s/", Code/binary>>),
+    ?assertEqual(~"https://www.erlang.org", proplists:get_value(~"location", Headers)),
+    {text, Clicked} = ws_recv(Sock),
+    ?assertNotEqual(nomatch, binary:match(Clicked, ~"1")),
+    ok = gen_tcp:close(Sock).
+
+a_non_web_url_is_refused(Config) when is_list(Config) ->
+    Sock = ws_connect(~"/"),
+    {text, _Connect} = ws_recv(Sock),
+    ok = ws_send(
+        Sock, json:encode([~"dashboard", ~"shorten", #{~"url" => ~"javascript:alert(1)"}])
+    ),
+    {text, Refused} = ws_recv(Sock),
+    ?assertNotEqual(nomatch, binary:match(Refused, ~"not an http(s) link")),
     ok = gen_tcp:close(Sock).
 
 %% --------------------------------------------------------------------
@@ -75,8 +102,12 @@ request(Path) ->
     Response = recv_all(Sock, <<>>),
     ok = gen_tcp:close(Sock),
     [Head, Body] = binary:split(Response, ~"\r\n\r\n"),
-    <<"HTTP/1.1 ", Code:3/binary, _/binary>> = Head,
-    {binary_to_integer(Code), Body}.
+    [<<"HTTP/1.1 ", Code:3/binary, _/binary>> | Lines] = binary:split(Head, ~"\r\n", [global]),
+    Headers = [
+        {string:lowercase(Name), string:trim(Value)}
+     || Line <- Lines, [Name, Value] <- [binary:split(Line, ~":")]
+    ],
+    {binary_to_integer(Code), Headers, Body}.
 
 recv_all(Sock, Acc) ->
     case gen_tcp:recv(Sock, 0, 5000) of

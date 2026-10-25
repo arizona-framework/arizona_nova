@@ -1,16 +1,17 @@
-# Arizona on Nova: example
+# Arizona on Nova: a link shortener
 
-A Nova application that serves an Arizona live page beside its own routes, on Nova's one
-listener:
+A small Nova application where the two frameworks split the work on one listener:
 
-- `/` is Arizona: a live counter (`src/example_counter.erl`) in a layout that loads Arizona's
-  client (`src/example_layout.erl`). Each click is a WebSocket event the server answers with a
-  patch of the slot that changed.
-- `/api/time` is Nova: a plain controller (`src/example_api.erl`) from Nova's router
+- **Nova** follows short links. `/s/:code` redirects to the stored URL and counts the visit
+  (`src/example_links_controller.erl`), and `/api/links` lists them as JSON. Plain Nova routes
   (`src/example_router.erl`).
+- **Arizona** is the dashboard at `/` (`src/example_dashboard.erl`): shorten a URL, and watch
+  each link's clicks climb live, in every open tab, the moment someone follows it through Nova.
+  No polling: the visit Nova counts is broadcast, and the dashboard patches just that number.
 
-The wiring is all in `config/sys.config`: Arizona's middleware in front of Nova's chain, and the
-Arizona routes in the `arizona_nova` env.
+They share a tiny store (`src/example_links.erl`, an ETS table) and Arizona's pubsub. The wiring
+is all in `config/sys.config`: Arizona's middleware in front of Nova's chain, and the Arizona
+routes in the `arizona_nova` env.
 
 ## Run it
 
@@ -24,5 +25,5 @@ rebar3 shell
 and open <http://localhost:8080> (change `port` in `config/sys.config` if 8080 is taken).
 Without the `_checkouts` link it runs `arizona_nova`'s `main` instead.
 
-`rebar3 ct` boots it on a free port and drives the page, a click and the Nova route over the
-wire.
+`rebar3 ct` boots it on a free port and drives the whole loop over the wire: a link shortened
+on the dashboard, followed through Nova's redirect, and its click arriving back live.

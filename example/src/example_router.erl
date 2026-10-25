@@ -1,8 +1,8 @@
 -module(example_router).
 -moduledoc """
-Nova's routes for the example. Arizona's (the live page, its WebSocket and the
-client script) are in the `arizona_nova` env instead; a request none of those
-matches reaches this router as in any Nova application.
+Nova's routes: following a short link and the JSON API. Arizona's (the live
+dashboard, its WebSocket and the client script) are in the `arizona_nova` env;
+a request none of those matches reaches this router as in any Nova application.
 """.
 -behaviour(nova_router).
 
@@ -14,6 +14,9 @@ routes(_Env) ->
         #{
             prefix => "",
             security => false,
-            routes => [{"/api/time", fun example_api:time/1, #{methods => [get]}}]
+            routes => [
+                {"/s/:code", fun example_links_controller:follow/1, #{methods => [get]}},
+                {"/api/links", fun example_links_controller:index/1, #{methods => [get]}}
+            ]
         }
     ].
