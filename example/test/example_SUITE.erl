@@ -29,7 +29,11 @@ all() ->
 init_per_suite(Config) ->
     {ok, Cowboy} = application:get_env(nova, cowboy_configuration),
     Port = pick_port(),
-    ok = application:set_env(nova, cowboy_configuration, Cowboy#{port => Port}),
+    %% Persistent: loading Nova re-applies the config file over a plain
+    %% set_env, and whether it is loaded yet varies.
+    ok = application:set_env(nova, cowboy_configuration, Cowboy#{port => Port}, [
+        {persistent, true}
+    ]),
     {ok, _} = application:ensure_all_started(example),
     ok = persistent_term:put(example_port, Port),
     Config.
