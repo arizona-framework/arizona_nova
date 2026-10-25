@@ -55,6 +55,8 @@ next node, and unmounts the routes; Nova keeps serving until its own shutdown.
 Arizona routes do not pass through Nova's plugins and security handlers: Arizona's own route
 `middlewares` (the CSRF Origin check among them) apply.
 
+A complete application, with a live page beside a Nova controller, is in [`example/`](example/).
+
 ## Env
 
 | Key | Default | Description |

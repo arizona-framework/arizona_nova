@@ -1,0 +1,2 @@
+# Follows its deps' main branches; a lock would pin them.
+rebar.lock

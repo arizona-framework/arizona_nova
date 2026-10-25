@@ -1,0 +1,14 @@
+{application, example, [
+    {description, "A Nova application serving an Arizona live page beside its own routes"},
+    {vsn, "0.1.0"},
+    {registered, [example_sup]},
+    {mod, {example_app, []}},
+    {applications, [
+        kernel,
+        stdlib,
+        nova,
+        arizona_nova
+    ]},
+    {env, []},
+    {modules, []}
+]}.
