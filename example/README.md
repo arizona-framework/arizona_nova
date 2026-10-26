@@ -23,7 +23,7 @@ rebar3 shell
 ```
 
 and open <http://localhost:8080> (change `port` in `config/sys.config` if 8080 is taken).
-Without the `_checkouts` link it runs `arizona_nova`'s `main` instead.
+Without the `_checkouts` link it runs the published `arizona_nova` instead.
 
 `rebar3 ct` boots it on a free port and drives the whole loop over the wire: a link shortened
 on the dashboard, followed through Nova's redirect, and its click arriving back live.

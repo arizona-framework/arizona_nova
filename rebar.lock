@@ -1,12 +1,6 @@
 {"1.2.0",
-[{<<"arizona">>,
-  {git,"https://github.com/arizona-framework/arizona.git",
-       {ref,"1a8caf6c36e5b4b4e6ea20c35118f1bd023d8fa4"}},
-  0},
- {<<"arizona_cowboy">>,
-  {git,"https://github.com/arizona-framework/arizona_cowboy.git",
-       {ref,"28e660c678396895f62dfb397599408824d76cde"}},
-  0},
+[{<<"arizona">>,{pkg,<<"arizona">>,<<"0.4.0">>},0},
+ {<<"arizona_cowboy">>,{pkg,<<"arizona_cowboy">>,<<"0.1.0">>},0},
  {<<"cowboy">>,{pkg,<<"cowboy">>,<<"2.18.0">>},1},
  {<<"cowlib">>,{pkg,<<"cowlib">>,<<"2.21.0">>},2},
  {<<"erlydtl">>,{pkg,<<"erlydtl">>,<<"0.14.0">>},1},
@@ -16,6 +10,8 @@
  {<<"thoas">>,{pkg,<<"thoas">>,<<"1.2.1">>},1}]}.
 [
 {pkg_hash,[
+ {<<"arizona">>, <<"2700535AE2DC3F075665F4C0D3DE39D53F87CFFC412D6E17CD1616988E6E545F">>},
+ {<<"arizona_cowboy">>, <<"E758702F937D9DBB0A10BBBFB78E05F30A79304ECB9C094642B4BA81E0D2E096">>},
  {<<"cowboy">>, <<"BFF388EB4D6356CB3F88C26E65B515976BF04B401B805D31550C3E60EBA8FE18">>},
  {<<"cowlib">>, <<"3EA757C79784BDBDEBAC7857CE3ADF2290AF6B8680D4248C75E40CED2E98C89E">>},
  {<<"erlydtl">>, <<"964B2DC84F8C17ACFAA69C59BA129EF26AC45D2BA898C3C6AD9B5BDC8BA13CED">>},
@@ -24,6 +20,8 @@
  {<<"ranch">>, <<"7DE7B041A9A6A5091A3AA5898D66C0564BE671D87DB4F9D63B1B5EE775B097DF">>},
  {<<"thoas">>, <<"19A25F31177A17E74004D4840F66D791D4298C5738790FA2CC73731EB911F195">>}]},
 {pkg_hash_ext,[
+ {<<"arizona">>, <<"773EF39F9F9F9155F5292AD97EB26371726F67CF82BA6E098077301CBAF6D59F">>},
+ {<<"arizona_cowboy">>, <<"24F396D7662EDC438A4EFE38F73788324838F0C4657F76D450C332078843EB63">>},
  {<<"cowboy">>, <<"62D0B26ABCF455054972B0DA242389C69D5982CE5914AFB8C344517F667B9600">>},
  {<<"cowlib">>, <<"0960248773762A5319B3C17285028BC76F54F58EF0F9451367401BDF67B46274">>},
  {<<"erlydtl">>, <<"D80EC044CD8F58809C19D29AC5605BE09E955040911B644505E31E9DD8143431">>},

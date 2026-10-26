@@ -13,5 +13,9 @@
     {env, []},
     {modules, []},
     {licenses, ["MIT"]},
-    {links, []}
+    {links, [
+        {"GitHub", "https://github.com/arizona-framework/arizona_nova"},
+        {"Arizona", "https://github.com/arizona-framework/arizona"},
+        {"Nova", "https://github.com/novaframework/nova"}
+    ]}
 ]}.
